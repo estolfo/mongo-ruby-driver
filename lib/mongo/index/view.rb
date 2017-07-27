@@ -29,7 +29,13 @@ module Mongo
       #   when sending the listIndexes command.
       attr_reader :batch_size
 
-      def_delegators :@collection, :cluster, :database, :read_preference, :write_concern
+      def_delegators :@collection,
+                     :cluster,
+                     :database,
+                     :read_preference,
+                     :write_concern,
+                     :with_session_write_retry
+
       def_delegators :cluster, :next_primary
 
       # The index key field.
@@ -156,7 +162,10 @@ module Mongo
                }
 
         spec[:write_concern] = write_concern if server.features.collation_enabled?
-        Operation::Write::CreateIndex.new(spec).execute(server)
+
+        with_session_write_retry(spec) do |spec, server|
+          Operation::Write::CreateIndex.new(spec).execute(server)
+        end
       end
 
       # Convenience method for getting index information by a specific name or
@@ -225,7 +234,10 @@ module Mongo
                }
         server = next_primary
         spec[:write_concern] = write_concern if server.features.collation_enabled?
-        Operation::Write::DropIndex.new(spec).execute(server)
+
+        with_session_write_retry(spec) do |spec, server|
+          Operation::Write::DropIndex.new(spec).execute(server)
+        end
       end
 
       def index_name(spec)
