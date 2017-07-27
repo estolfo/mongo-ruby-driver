@@ -52,6 +52,8 @@ module Mongo
 
         def execute_write_command(server)
           command_spec = spec.merge(:documents => ensure_ids(documents))
+          command_spec[:txnNum] = options[:txnNum] if options[:txnNum]
+          command_spec[:txnNum] = options[:sessionId] if options[:sessionId]
           Result.new(Command::Insert.new(command_spec).execute(server), @ids).validate!
         end
 

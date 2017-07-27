@@ -502,6 +502,14 @@ module Mongo
       def namespace
         "#{db_name}.#{coll_name}"
       end
+
+      def transaction_number
+        @spec[:txnNum]
+      end
+
+      def session_id
+        @spec[:sessionId]
+      end
     end
   end
 end

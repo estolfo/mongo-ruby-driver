@@ -38,7 +38,8 @@ module Mongo
     def_delegators :@collection,
                    :database,
                    :cluster,
-                   :next_primary
+                   :next_primary,
+                   :with_session_write_retry
 
     def_delegators :database, :client
 
@@ -55,13 +56,11 @@ module Mongo
       result_combiner = ResultCombiner.new
       write_with_retry do
         operations = op_combiner.combine
-        server = next_primary
-        raise Error::UnsupportedCollation.new if op_combiner.has_collation && !server.features.collation_enabled?
         operations.each do |operation|
           execute_operation(
             operation.keys.first,
             operation.values.first,
-            server,
+            op_combiner,
             operation_id,
             result_combiner
           )
@@ -145,16 +144,24 @@ module Mongo
       }
     end
 
-    def execute_operation(name, values, server, operation_id, combiner)
+    def execute_operation(name, values, op_combiner, operation_id, combiner)
       begin
-        if values.size > server.max_write_batch_size
-          split_execute(name, values, server, operation_id, combiner)
-        else
-          combiner.combine!(send(name, values, server, operation_id), values.size)
+        spec = send("#{name}_spec", values, operation_id)
+        with_session_write_retry(spec) do |spec, server|
+
+          if op_combiner.has_collation && !server.features.collation_enabled?
+            raise Error::UnsupportedCollation.new
+          end
+
+          if values.size > server.max_write_batch_size
+            split_execute(name, values, op_combiner, operation_id, combiner)
+          else
+            combiner.combine!(send(name, spec).execute(server), values.size)
+          end
         end
       rescue Error::MaxBSONSize, Error::MaxMessageSize => e
         raise e if values.size <= 1
-        split_execute(name, values, server, operation_id, combiner)
+        split_execute(name, values, op_combiner, operation_id, combiner)
       end
     end
 
@@ -167,29 +174,38 @@ module Mongo
       execute_operation(name, values, server, operation_id, combiner)
     end
 
-    def delete(documents, server, operation_id)
-      Operation::Write::Bulk::Delete.new(
-        base_spec(operation_id).merge(:deletes => documents)
-      ).execute(server)
+    def delete(spec)
+      Operation::Write::Bulk::Delete.new(spec)
     end
-
     alias :delete_one :delete
     alias :delete_many :delete
 
-    def insert_one(documents, server, operation_id)
-      Operation::Write::Bulk::Insert.new(
-        base_spec(operation_id).merge(:documents => documents)
-      ).execute(server)
+    def delete_spec(documents, operation_id)
+      base_spec(operation_id).merge(:deletes => documents)
+    end
+    alias :delete_one_spec :delete_spec
+    alias :delete_many_spec :delete_spec
+
+    def insert_one(spec)
+      Operation::Write::Bulk::Insert.new(spec)
     end
 
-    def update(documents, server, operation_id)
-      Operation::Write::Bulk::Update.new(
-        base_spec(operation_id).merge(:updates => documents)
-      ).execute(server)
+    def insert_one_spec(documents, operation_id)
+      base_spec(operation_id).merge(:documents => documents)
     end
 
+    def update(spec)
+      Operation::Write::Bulk::Update.new(spec)
+    end
     alias :replace_one :update
     alias :update_one :update
     alias :update_many :update
+
+    def update_spec(documents, operation_id)
+      base_spec(operation_id).merge(:updates => documents)
+    end
+    alias :update_one_spec :update_spec
+    alias :update_many_spec :update_spec
+    alias :replace_one_spec :update_spec
   end
 end

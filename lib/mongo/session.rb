@@ -65,12 +65,16 @@ module Mongo
       return yield(command, next_primary) unless retrying_writes?
 
       command[:sessionId] = @server_session.session_id
-      command[:txnNum] = next_txn_num
+      command[:txnNum] = next_transaction_number
       begin
-        yield(command, next_primary)
+        server = next_primary
+        #raise Exception unless server.features.retry_writes_enabled?
+        yield(command, server)
       rescue SocketError
         cluster.scan!
-        yield(command, next_primary)
+        server = next_primary
+        #raise Exception unless server.features.retry_writes_enabled?
+        yield(command, server)
       end
     end
 
@@ -80,7 +84,7 @@ module Mongo
       @retrying_writes ||= !!options[:retry_writes]
     end
 
-    def next_txn_num
+    def next_transaction_number
       @txn_num += 1
     end
 
