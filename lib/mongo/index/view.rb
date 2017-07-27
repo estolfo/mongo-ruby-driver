@@ -163,7 +163,7 @@ module Mongo
 
         spec[:write_concern] = write_concern if server.features.collation_enabled?
 
-        with_session_write_retry(spec) do |spec, server|
+        with_session_write_retry(spec, write_concern) do |spec, server|
           Operation::Write::CreateIndex.new(spec).execute(server)
         end
       end
@@ -235,7 +235,7 @@ module Mongo
         server = next_primary
         spec[:write_concern] = write_concern if server.features.collation_enabled?
 
-        with_session_write_retry(spec) do |spec, server|
+        with_session_write_retry(spec, write_concern) do |spec, server|
           Operation::Write::DropIndex.new(spec).execute(server)
         end
       end

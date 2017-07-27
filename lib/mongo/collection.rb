@@ -175,7 +175,7 @@ module Mongo
       if (options[:collation] || options[Operation::COLLATION]) && !server.features.collation_enabled?
         raise Error::UnsupportedCollation.new
       end
-      with_session_write_retry(operation) do |operation, server|
+      with_session_write_retry(operation, write_concern) do |operation, server|
         Operation::Commands::Create.new({
                                           selector: operation,
                                           db_name: database.name,
@@ -197,7 +197,7 @@ module Mongo
     # @since 2.0.0
     def drop
       selector = { :drop => name }
-      with_session_write_retry(selector) do |selector, server|
+      with_session_write_retry(selector, write_concern) do |selector, server|
         Operation::Commands::Drop.new({
                                           selector: selector,
                                           db_name: database.name,
@@ -357,7 +357,7 @@ module Mongo
     #
     # @since 2.0.0
     def insert_one(document, options = {})
-      with_session_write_retry(options) do |options, server|
+      with_session_write_retry(options, write_concern) do |options, server|
         Operation::Write::Insert.new(:documents => [ document ],
                                      :db_name => database.name,
                                      :coll_name => name,

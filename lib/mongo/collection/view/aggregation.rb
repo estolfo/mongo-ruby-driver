@@ -102,7 +102,7 @@ module Mongo
         # @yieldparam [ Hash ] Each matching document.
         def each
           return super unless builder.write?
-          with_session_write_retry({}) do |opts, server|
+          with_session_write_retry({}, builder.write_concern) do |opts, server|
             @options = @options.merge(opts)
             result = send_initial_query(server)
             @cursor = Cursor.new(view, result, server)

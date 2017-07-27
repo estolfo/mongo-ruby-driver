@@ -174,7 +174,7 @@ module Mongo
     # @since 2.0.0
     def drop
       operation = { :dropDatabase => 1 }
-      with_session_write_retry(operation) do |operation, server|
+      with_session_write_retry(operation, write_concern) do |operation, server|
         Operation::Commands::DropDatabase.new(selector: operation,
                                               db_name: name,
                                               write_concern: write_concern
@@ -264,9 +264,9 @@ module Mongo
       end
     end
 
-    def with_session_write_retry(command)
+    def with_session_write_retry(command, write_concern)
       if session
-        session.with_write_retry(command) do |command, server|
+        session.with_write_retry(command, write_concern) do |command, server|
           yield(command, server)
         end
       else

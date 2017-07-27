@@ -61,8 +61,10 @@ module Mongo
       end
     end
 
-    def with_write_retry(command)
+    def with_write_retry(command, write_concern)
       return yield(command, next_primary) unless retrying_writes?
+
+      raise Exception.new('cannot use retryable writes with w 0') if write_concern && write_concern.options[:w] == 0
 
       command[:sessionId] = @server_session.session_id
       command[:txnNum] = next_transaction_number

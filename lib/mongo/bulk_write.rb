@@ -147,7 +147,7 @@ module Mongo
     def execute_operation(name, values, op_combiner, operation_id, combiner)
       begin
         spec = send("#{name}_spec", values, operation_id)
-        with_session_write_retry(spec) do |spec, server|
+        with_session_write_retry(spec, write_concern) do |spec, server|
 
           if op_combiner.has_collation && !server.features.collation_enabled?
             raise Error::UnsupportedCollation.new
