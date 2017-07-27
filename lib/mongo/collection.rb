@@ -47,7 +47,7 @@ module Mongo
     attr_reader :session
 
     # Get client, cluster, read preference, and write concern from client.
-    def_delegators :database, :client, :cluster, :with_session_write_retry
+    def_delegators :database, :client, :cluster, :with_session_write_retry, :with_session
 
     # Delegate to the cluster for the next primary.
     def_delegators :cluster, :next_primary
@@ -175,9 +175,9 @@ module Mongo
       if (options[:collation] || options[Operation::COLLATION]) && !server.features.collation_enabled?
         raise Error::UnsupportedCollation.new
       end
-      with_session_write_retry(operation) do |command, server|
+      with_session_write_retry(operation) do |operation, server|
         Operation::Commands::Create.new({
-                                          selector: command,
+                                          selector: operation,
                                           db_name: database.name,
                                           write_concern: write_concern
                                         }).execute(server)
@@ -197,9 +197,9 @@ module Mongo
     # @since 2.0.0
     def drop
       selector = { :drop => name }
-      with_session_write_retry(selector) do |command, server|
+      with_session_write_retry(selector) do |selector, server|
         Operation::Commands::Drop.new({
-                                          selector: command,
+                                          selector: selector,
                                           db_name: database.name,
                                           write_concern: write_concern
                                       }).execute(server)
@@ -357,16 +357,15 @@ module Mongo
     #
     # @since 2.0.0
     def insert_one(document, options = {})
-      with_session_write_retry(options) do |opts, server|
-        Operation::Write::Insert.new(
-          :documents => [ document ],
-          :db_name => database.name,
-          :coll_name => name,
-          :write_concern => write_concern,
-          :bypass_document_validation => !!options[:bypass_document_validation],
-          :options => opts,
-          :id_generator => client.options[:id_generator]
-        ).execute(server)
+      with_session_write_retry(options) do |options, server|
+        Operation::Write::Insert.new(:documents => [ document ],
+                                     :db_name => database.name,
+                                     :coll_name => name,
+                                     :write_concern => write_concern,
+                                     :bypass_document_validation => !!options[:bypass_document_validation],
+                                     :options => options,
+                                     :id_generator => client.options[:id_generator]
+                                    ).execute(server)
       end
     end
 
@@ -382,7 +381,7 @@ module Mongo
     #
     # @since 2.0.0
     def insert_many(documents, options = {})
-      inserts = documents.map{ |doc| { :insert_one => doc }}
+      inserts = documents.map { |doc| { :insert_one => doc }}
       bulk_write(inserts, options)
     end
 

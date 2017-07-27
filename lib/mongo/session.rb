@@ -20,7 +20,8 @@ module Mongo
     attr_reader :client
     attr_reader :options
 
-    def_delegators :client, :list_databases, :database_names
+    def_delegators :client, :list_databases, :database_names, :cluster
+    def_delegators :cluster, :next_primary
 
     AFTER_CLUSTER_TIME = 'afterClusterTime'.freeze
 
@@ -30,6 +31,7 @@ module Mongo
       @server_session = ServerSession.new(@client)
       @ended = false
       @txn_num = -1
+      @operation_time = nil
     end
 
     def end_session
@@ -47,7 +49,7 @@ module Mongo
       end
     end
 
-    def record_operation_time
+    def with_recorded_operation_time
       set_operation_time(yield)
     end
 
@@ -60,17 +62,15 @@ module Mongo
     end
 
     def with_write_retry(command)
-      server = client.cluster.next_primary
-      return yield(command, server) unless retrying_writes?
+      return yield(command, next_primary) unless retrying_writes?
 
       command[:sessionId] = @server_session.session_id
-      command[:txnNum] = generate_txn_num
+      command[:txnNum] = next_txn_num
       begin
-        yield(command, server)
+        yield(command, next_primary)
       rescue SocketError
-        collection.cluster.scan!
-        server = client.cluster.next_primary
-        yield(command, server)
+        cluster.scan!
+        yield(command, next_primary)
       end
     end
 
@@ -80,12 +80,12 @@ module Mongo
       @retrying_writes ||= !!options[:retry_writes]
     end
 
-    def generate_txn_num
+    def next_txn_num
       @txn_num += 1
     end
 
     def causally_consistent_reads?
-      options[:causally_consistent_reads]
+      @causally_consistent_reads ||= options[:causally_consistent_reads]
     end
 
     def set_operation_time(result)

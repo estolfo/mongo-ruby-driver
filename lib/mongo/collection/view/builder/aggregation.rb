@@ -85,15 +85,15 @@ module Mongo
             pipeline.any? { |operator| operator[:$out] || operator['$out'] }
           end
 
+          private
+
           def aggregation_command
-            @aggregation_command ||= (command = BSON::Document.new(:aggregate => collection.name, :pipeline => pipeline)
+            command = BSON::Document.new(:aggregate => collection.name, :pipeline => pipeline)
             command[:cursor] = cursor if cursor
             command[:readConcern] = collection.read_concern if collection.read_concern
             command.merge!(Options::Mapper.transform_documents(options, MAPPINGS))
-            command)
           end
 
-          private
 
           def cursor
             if options[:use_cursor] == true || options[:use_cursor].nil?

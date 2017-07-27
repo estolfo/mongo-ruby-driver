@@ -61,6 +61,8 @@ module Mongo
                      :cluster,
                      :database,
                      :read_preference,
+                     :session,
+                     :with_session,
                      :with_session_write_retry
 
       # Delegate to the cluster for the next primary.
@@ -167,16 +169,6 @@ module Mongo
       end
 
       private
-
-      def with_session
-        if collection.session
-          collection.session.record_operation_time do
-            yield
-          end
-        else
-          yield
-        end
-      end
 
       def initialize_copy(other)
         @collection = other.collection

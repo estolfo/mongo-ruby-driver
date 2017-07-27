@@ -41,13 +41,11 @@ module Mongo
           cmd[:maxTimeMS] = max_time_ms if max_time_ms
           cmd[:writeConcern] = write_concern.options if write_concern
 
-          with_session_write_retry(cmd) do |command, server|
-            apply_collation!(command, server, opts)
-
-            Operation::Commands::Command.new({
-                                              :selector => command,
-                                              :db_name => database.name
-                                             }).execute(server)
+          with_session_write_retry(cmd) do |cmd, server|
+            apply_collation!(cmd, server, opts)
+            Operation::Commands::Command.new(:selector => cmd,
+                                             :db_name => database.name
+                                            ).execute(server)
           end.first['value']
         end
 
@@ -107,13 +105,11 @@ module Mongo
           cmd[:bypassDocumentValidation] = !!opts[:bypass_document_validation]
           cmd[:writeConcern] = write_concern.options if write_concern
 
-          value = with_session_write_retry(cmd) do |command, server|
-            apply_collation!(command, server, opts)
-
-            Operation::Commands::Command.new({
-                                                 :selector => command,
-                                                 :db_name => database.name
-                                             }).execute(server)
+          value = with_session_write_retry(cmd) do |cmd, server|
+            apply_collation!(cmd, server, opts)
+            Operation::Commands::Command.new(:selector => cmd,
+                                             :db_name => database.name
+                                             ).execute(server)
           end.first['value']
           value unless value.nil? || value.empty?
         end
@@ -212,15 +208,13 @@ module Mongo
         def remove(value, opts = {})
           delete_doc = { Operation::Q => filter, Operation::LIMIT => value }
 
-          with_session_write_retry(delete_doc) do |command, server|
-            apply_collation!(command, server, opts)
-
-            Operation::Write::Delete.new(
-                :delete => command,
-                :db_name => collection.database.name,
-                :coll_name => collection.name,
-                :write_concern => collection.write_concern
-            ).execute(server)
+          with_session_write_retry(delete_doc) do |delete_doc, server|
+            apply_collation!(delete_doc, server, opts)
+            Operation::Write::Delete.new(:delete => delete_doc,
+                                         :db_name => collection.database.name,
+                                         :coll_name => collection.name,
+                                         :write_concern => collection.write_concern
+                                        ).execute(server)
           end
         end
 
@@ -230,16 +224,14 @@ module Mongo
                          Operation::MULTI => multi,
                          Operation::UPSERT => !!opts[:upsert]}
 
-          with_session_write_retry(update_doc) do |command, server|
-            apply_collation!(command, server, opts)
-
-            Operation::Write::Update.new(
-                :update => command,
-                :db_name => collection.database.name,
-                :coll_name => collection.name,
-                :write_concern => collection.write_concern,
-                :bypass_document_validation => !!opts[:bypass_document_validation]
-            ).execute(server)
+          with_session_write_retry(update_doc) do |update_doc, server|
+            apply_collation!(update_doc, server, opts)
+            Operation::Write::Update.new(:update => update_doc,
+                                         :db_name => collection.database.name,
+                                         :coll_name => collection.name,
+                                         :write_concern => collection.write_concern,
+                                         :bypass_document_validation => !!opts[:bypass_document_validation]
+                                        ).execute(server)
           end
         end
       end

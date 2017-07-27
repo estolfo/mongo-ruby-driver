@@ -158,11 +158,10 @@ module Mongo
     def command(operation, opts = {})
       preference = ServerSelector.get(opts[:read] || ServerSelector::PRIMARY)
       server = preference.select_server(cluster)
-      Operation::Commands::Command.new({
-        :selector => operation,
-        :db_name => name,
-        :read => preference
-      }).execute(server)
+      Operation::Commands::Command.new(:selector => operation,
+                                       :db_name => name,
+                                       :read => preference
+                                      ).execute(server)
     end
 
     # Drop the database and all its associated information.
@@ -175,8 +174,8 @@ module Mongo
     # @since 2.0.0
     def drop
       operation = { :dropDatabase => 1 }
-      with_session_write_retry(operation) do |command, server|
-        Operation::Commands::DropDatabase.new(selector: command,
+      with_session_write_retry(operation) do |operation, server|
+        Operation::Commands::DropDatabase.new(selector: operation,
                                               db_name: name,
                                               write_concern: write_concern
                                              ).execute(server)
@@ -258,13 +257,20 @@ module Mongo
 
     private
 
-    def with_session_write_retry(cmd)
+    def with_session
+      return yield unless session
+      session.with_recorded_operation_time do
+        yield
+      end
+    end
+
+    def with_session_write_retry(command)
       if session
-        session.with_write_retry(cmd) do |command, server|
+        session.with_write_retry(command) do |command, server|
           yield(command, server)
         end
       else
-        yield(cmd, next_primary)
+        yield(command, next_primary)
       end
     end
   end
