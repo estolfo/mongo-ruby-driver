@@ -98,11 +98,48 @@ module Mongo
     # @return [ Result ] The result of the operation.
     #
     # @since 2.1.0
-    def write_with_retry(session, server_selector)
+    def write_with_retry(session, server_selector, &block)
+
+      if session.nil? || !session.retry_writes?
+        return legacy_write_with_retry(server_selector.call, &block)
+      else
+        server = server_selector.call
+        return legacy_write_with_retry(server, &block) unless server.retry_writes?
+
+        begin
+          txn_num = session.next_txn_num
+          yield(server, txn_num)
+
+
+        rescue Error::SocketError, Error::SocketTimeoutError, Error::OperationFailure => e
+          raise e if e.is_a?(Error::OperationFailure) && !e.write_retryable?
+          cluster.scan!
+          begin
+            server = server_selector.call
+            raise e unless server.retry_writes?
+            yield(server, txn_num)
+          rescue Error::NoServerAvailable
+            raise e
+          rescue Error::SocketError, Error::SocketTimeoutError => second_e
+            cluster.scan!
+            raise second_e
+          rescue Error::OperationFailure => second_e
+            if second_e.write_retryable?
+              cluster.scan!
+            end
+            raise second_e
+          end
+        end
+      end
+    end
+
+    private
+
+    def legacy_write_with_retry(server)
       attempt = 0
       begin
         attempt += 1
-        yield(server_selector.call)
+        yield(server, nil)
       rescue Error::OperationFailure => e
         raise(e) if attempt > Cluster::MAX_WRITE_RETRIES
         if e.write_retryable?
@@ -114,8 +151,6 @@ module Mongo
         end
       end
     end
-
-    private
 
     # Log a warning so that any application slow down is immediately obvious.
     def log_retry(e)
