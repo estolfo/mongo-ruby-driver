@@ -39,7 +39,7 @@ module Mongo
     # @since 2.5.0
     attr_reader :cluster_time
 
-    def_delegators :@server_session, :session_id, :next_txn_id
+    def_delegators :@server_session, :session_id, :next_txn_num
 
     def_delegators :client, :retry_writes?
 
