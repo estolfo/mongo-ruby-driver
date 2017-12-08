@@ -53,6 +53,7 @@ module Mongo
       :read,
       :read_retry_interval,
       :replica_set,
+      :retry_writes,
       :server_selection_timeout,
       :socket_timeout,
       :ssl,
@@ -236,6 +237,8 @@ module Mongo
     #   mongod logs upon establishing a connection in server versions >= 3.4.
     # @option options [ String ] :platform Platform information to include in the
     #   metadata printed to the mongod logs upon establishing a connection in server versions >= 3.4.
+    # @option options [ true, false ] :retry_writes Retry writes once when connected to a 3.6 replica set
+    #   or sharded cluster.
     #
     # @since 2.0.0
     def initialize(addresses_or_uri, options = Options::Redacted.new)
@@ -424,6 +427,21 @@ module Mongo
         raise Error::InvalidSession.new(Session::SESSIONS_NOT_SUPPORTED)
       end
       Session.new(@session_pool.checkout, self, options)
+    end
+
+    # Will writes executed with this client be retried.
+    #
+    # @example Will writes be retried.
+    #   client.retry_writes?
+    #
+    # @return [ true, false ] If writes will be retried.
+    #
+    # @note Retryable writes are only available on server versions 3.6+ and with
+    #   sharded clusters or replica sets.
+    #
+    # @since 2.5.0
+    def retry_writes?
+      !!@options[:retry_writes] && (cluster.replica_set? || cluster.sharded?)
     end
 
     private

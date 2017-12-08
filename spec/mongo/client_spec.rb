@@ -1450,4 +1450,50 @@ describe Mongo::Client do
       end
     end
   end
+
+  describe '#retry_writes' do
+
+    context 'when the option is set to true' do
+
+      let(:client) do
+        described_class.new([default_address.to_s], :retry_writes => true)
+      end
+
+      context 'when the topology is standalone', if: standalone? do
+
+        it 'returns false' do
+          expect(client.retry_writes?).to be(false)
+        end
+      end
+
+      context 'when the topology is replica set or sharded', if: !standalone? do
+
+        it 'returns true' do
+          expect(client.retry_writes?).to be(true)
+        end
+      end
+    end
+
+    context 'when the option is set to false' do
+
+      let(:client) do
+        described_class.new([default_address.to_s], :retry_writes => false)
+      end
+
+      it 'returns false' do
+        expect(client.retry_writes?).to be(false)
+      end
+    end
+
+    context 'when the option is not defined' do
+
+      let(:client) do
+        described_class.new([default_address.to_s])
+      end
+
+      it 'returns false' do
+        expect(client.retry_writes?).to be(false)
+      end
+    end
+  end
 end
