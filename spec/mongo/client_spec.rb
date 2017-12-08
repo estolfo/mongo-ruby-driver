@@ -1410,6 +1410,10 @@ describe Mongo::Client do
         end
 
         before do
+          session_a_server_session.next_txn_num
+          session_a_server_session.next_txn_num
+          session_b_server_session.next_txn_num
+          session_b_server_session.next_txn_num
           session_a.end_session
           session_b.end_session
         end
@@ -1417,6 +1421,11 @@ describe Mongo::Client do
         it 'is returned to the front of the queue' do
           expect(authorized_client.start_session.instance_variable_get(:@server_session)).to be(session_b_server_session)
           expect(authorized_client.start_session.instance_variable_get(:@server_session)).to be(session_a_server_session)
+        end
+
+        it 'preserves the transaction numbers on the server sessions' do
+          expect(authorized_client.start_session.next_txn_num).to be(2)
+          expect(authorized_client.start_session.next_txn_num).to be(2)
         end
       end
 
