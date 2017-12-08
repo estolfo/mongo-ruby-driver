@@ -39,7 +39,9 @@ module Mongo
     # @since 2.5.0
     attr_reader :cluster_time
 
-    def_delegators :@server_session, :session_id
+    def_delegators :@server_session, :session_id, :next_txn_id
+
+    def_delegators :client, :retry_writes?
 
     # Error message describing that the session was attempted to be used by a client different from the
     # one it was originally associated with.
