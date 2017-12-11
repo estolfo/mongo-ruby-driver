@@ -31,7 +31,7 @@ describe 'Retryable Writes' do
           end
 
           before do
-            test.setup_test(authorized_collection)
+            test.setup_test(collection)
           end
 
           after do
