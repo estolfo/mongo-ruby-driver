@@ -49,19 +49,19 @@ describe 'Retryable Writes' do
             end
           end
 
-          it 'has the correct data in the collection', if: test.outcome_collection_data do
+          it 'has the correct data in the collection', if: (sessions_enabled? && replica_set? && test.outcome_collection_data) do
             skip 'Test cannot be run on this server version' unless spec.server_version_satisfied?(client)
             results
             expect(collection.find.to_a).to match_collection_data(test)
           end
 
           if test.error?
-            it 'raises an error' do
+            it 'raises an error', if: sessions_enabled? && replica_set? do
               skip 'Test cannot be run on this server version' unless spec.server_version_satisfied?(client)
               expect(results).to be_a(Mongo::Error)
             end
           else
-            it 'returns the correct result' do
+            it 'returns the correct result', if: sessions_enabled? && replica_set? do
               skip 'Test cannot be run on this server version' unless spec.server_version_satisfied?(client)
               expect(results).to match_operation_result(test)
             end
