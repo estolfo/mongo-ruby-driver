@@ -141,9 +141,7 @@ module Mongo
       # @since 2.0.0
       attr_reader :description
 
-      attr_reader :fail_point
-
-      FAIL_POINT_DOC = { configureFailPoint: "onPrimaryTransactionalWrite" }
+      FAIL_POINT_BASE_COMMAND = { configureFailPoint: "onPrimaryTransactionalWrite" }
 
       # Instantiate the new CRUDTest.
       #
@@ -157,7 +155,7 @@ module Mongo
       # @since 2.0.0
       def initialize(data, test)
         @data = data
-        @fail_point = FAIL_POINT_DOC.merge(test['failPoint'])
+        @fail_point_command = FAIL_POINT_BASE_COMMAND.merge(test['failPoint']) if test['failPoint']
         @description = test['description']
         @operation = Operation.get(test['operation'])
         @outcome = test['outcome']
@@ -175,10 +173,25 @@ module Mongo
       #
       # @since 2.0.0
       def run(collection)
-        @collection = collection
-        @collection.insert_many(@data)
-        collection.client.use(:admin).command(fail_point) if fail_point
         @operation.execute(collection)
+      end
+
+      def setup_test(collection)
+        clear_fail_point(collection)
+        @collection = collection
+        collection.delete_many
+        collection.insert_many(@data)
+        set_up_fail_point(collection)
+      end
+
+      def set_up_fail_point(collection)
+        collection.client.use(:admin).command(@fail_point_command) if @fail_point_command
+      end
+
+      def clear_fail_point(collection)
+        if @fail_point_command
+          collection.client.use(:admin).command(FAIL_POINT_BASE_COMMAND.merge(mode: "off"))
+        end
       end
 
       # The expected result of running the test.
@@ -259,7 +272,7 @@ module Mongo
             actual.nil?
           when Hash
             actual.all? do |k, v|
-              expected[k] == v || handle_upserted_id(k, expected[k], v)
+              expected[k] == v || handle_upserted_id(k, expected[k], v) || handle_inserted_ids(k, expected[k], v)
             end
           when Integer
             expected == actual
@@ -272,6 +285,12 @@ module Mongo
           if expected_id.is_a?(Integer)
             actual_id.is_a?(BSON::ObjectId) || actual_id.nil?
           end
+        end
+      end
+
+      def handle_inserted_ids(field, expected, actual)
+        if field == 'insertedIds'
+          expected.values == actual
         end
       end
 

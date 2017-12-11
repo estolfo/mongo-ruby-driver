@@ -52,6 +52,7 @@ module Mongo
         if server.features.sessions_enabled? || !session.send(:implicit_session?)
           add_cluster_time!(selector, server)
           add_session_id!(selector)
+          selector[:txnNumber] = BSON::Int64.new(txn_num) if txn_num
         end
       end
 

@@ -419,25 +419,18 @@ module Mongo
     # @since 2.0.0
     def insert_one(document, options = {})
       client.send(:with_session, options) do |session|
-
-        spec = { :documents => [ document ],
-                 :db_name => database.name,
-                 :coll_name => name,
-                 :write_concern => write_concern,
-                 :bypass_document_validation => !!options[:bypass_document_validation],
-                 :options => options,
-                 :id_generator => client.options[:id_generator],
-                 :session => session }
-
-        write_with_retry(session, Proc.new { next_primary }) do |server, txn_num|
-
-          if txn_num
-            spec.merge!(txn_num: txn_num)
-          else
-            spec.delete(:txn_num)
-          end
-
-          Operation::Write::Insert.new(spec).execute(server)
+        write_with_retry(session, write_concern, Proc.new { next_primary }) do |server, txn_num|
+          Operation::Write::Insert.new(
+                :documents => [ document ],
+                :db_name => database.name,
+                :coll_name => name,
+                :write_concern => write_concern,
+                :bypass_document_validation => !!options[:bypass_document_validation],
+                :options => options,
+                :id_generator => client.options[:id_generator],
+                :session => session,
+                :txn_num => txn_num
+           ).execute(server)
         end
       end
     end

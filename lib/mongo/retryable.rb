@@ -98,13 +98,13 @@ module Mongo
     # @return [ Result ] The result of the operation.
     #
     # @since 2.1.0
-    def write_with_retry(session, server_selector, &block)
+    def write_with_retry(session, write_concern, server_selector, &block)
 
-      if session.nil? || !session.retry_writes?
-        return legacy_write_with_retry(server_selector.call, &block)
+      if session.nil? || !session.retry_writes? || (write_concern && !write_concern.acknowledged?)
+        return legacy_write_with_retry(server_selector, &block)
       else
         server = server_selector.call
-        return legacy_write_with_retry(server, &block) unless server.retry_writes?
+        return legacy_write_with_retry(server_selector, server, &block) unless server.retry_writes?
 
         begin
           txn_num = session.next_txn_num
@@ -135,12 +135,13 @@ module Mongo
 
     private
 
-    def legacy_write_with_retry(server)
+    def legacy_write_with_retry(server_selector, server = nil)
       attempt = 0
       begin
         attempt += 1
-        yield(server, nil)
+        yield(server || server_selector.call)
       rescue Error::OperationFailure => e
+        server = nil
         raise(e) if attempt > Cluster::MAX_WRITE_RETRIES
         if e.write_retryable?
           log_retry(e)

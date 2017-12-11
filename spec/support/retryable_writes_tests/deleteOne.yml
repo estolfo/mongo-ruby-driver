@@ -6,47 +6,43 @@ minServerVersion: '3.6'
 
 tests:
     -
-        description: "InsertOne is committed on first attempt"
+        description: "DeleteOne is committed on first attempt"
         failPoint:
             mode: { times: 1 }
         operation:
-            name: "insertOne"
+            name: "deleteOne"
             arguments:
-                document: { _id: 3, x: 33 }
+                filter: { _id: 1 }
         outcome:
             result:
-                insertedId: 3
+                deletedCount: 1
             collection:
                 data:
-                    - { _id: 1, x: 11 }
                     - { _id: 2, x: 22 }
-                    - { _id: 3, x: 33 }
     -
-        description: "InsertOne is not committed on first attempt"
+        description: "DeleteOne is not committed on first attempt"
         failPoint:
             mode: { times: 1 }
             data: { failBeforeCommitExceptionCode: 1 }
         operation:
-            name: "insertOne"
+            name: "deleteOne"
             arguments:
-                document: { _id: 3, x: 33 }
+                filter: { _id: 1 }
         outcome:
             result:
-                insertedId: 3
+                deletedCount: 1
             collection:
                 data:
-                    - { _id: 1, x: 11 }
                     - { _id: 2, x: 22 }
-                    - { _id: 3, x: 33 }
     -
-        description: "InsertOne is never committed"
+        description: "DeleteOne is never committed"
         failPoint:
             mode: { times: 2 }
             data: { failBeforeCommitExceptionCode: 1 }
         operation:
-            name: "insertOne"
+            name: "deleteOne"
             arguments:
-                document: { _id: 3, x: 33 }
+                filter: { _id: 1 }
         outcome:
             error: true
             collection:
