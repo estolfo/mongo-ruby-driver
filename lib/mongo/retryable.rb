@@ -125,6 +125,7 @@ module Mongo
     end
 
     def retry_write(original_error, txn_num, server_selector, &block)
+      log_retry(original_error)
       cluster.scan!
       server = server_selector.call
       raise original_error unless (server.retry_writes? && txn_num)
