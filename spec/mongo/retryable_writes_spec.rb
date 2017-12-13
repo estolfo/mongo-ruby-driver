@@ -94,16 +94,239 @@ describe 'Retryable Writes' do
 
     shared_examples_for 'an operation that is retried' do
 
-      before do
-        # Note that for writes, server.connectable? is called, refreshing the socket
-        allow(primary).to receive(:connectable?).and_return(true)
-        expect(primary_socket).to receive(:write).and_raise(Mongo::Error::SocketError)
-        expect(client.cluster).to receive(:scan!)
+      context 'when the operation fails on the first attempt' do
+
+        before do
+          # Note that for writes, server.connectable? is called, refreshing the socket
+          allow(primary).to receive(:connectable?).and_return(true)
+          expect(primary_socket).to receive(:write).and_raise(error)
+        end
+
+        context 'when the error is retryable' do
+
+          before do
+            expect(Mongo::Logger.logger).to receive(:warn).once
+            expect(client.cluster).to receive(:scan!)
+          end
+
+          context 'when the error is a SocketError' do
+
+            let(:error) do
+              Mongo::Error::SocketError
+            end
+
+            it 'retries writes' do
+              operation
+              expect(collection.find(a: 1).count).to eq(1)
+            end
+          end
+
+          context 'when the error is a SocketTimeoutError' do
+
+            let(:error) do
+              Mongo::Error::SocketTimeoutError
+            end
+
+            it 'retries writes' do
+              operation
+              expect(collection.find(a: 1).count).to eq(1)
+            end
+          end
+
+          context 'when the error is a retryable OperationFailure' do
+
+            let(:error) do
+              Mongo::Error::OperationFailure.new('not master')
+            end
+
+            it 'retries writes' do
+              operation
+              expect(collection.find(a: 1).count).to eq(1)
+            end
+          end
+        end
+
+        context 'when the error is not retryable' do
+
+          context 'when the error is a non-retryable OperationFailure' do
+
+            let(:error) do
+              Mongo::Error::OperationFailure.new('other error')
+            end
+
+            it 'does not retry writes' do
+              expect {
+                operation
+              }.to raise_error(error)
+              expect(collection.find(a: 1).count).to eq(0)
+            end
+          end
+        end
       end
 
-      it 'retries writes', if: !standalone? || !sessions_enabled? do
-        operation
-        expect(collection.find(a: 1).count).to eq(1)
+      context 'when the operation fails on the first attempt and again on the second attempt' do
+
+        before do
+          # Note that for writes, server.connectable? is called, refreshing the socket
+          allow(primary).to receive(:connectable?).and_return(true)
+          allow(primary_socket).to receive(:write).and_raise(error)
+        end
+
+        context 'when the selected server does not support retryable writes' do
+
+          before do
+            legacy_primary = double('legacy primary', :'retry_writes?' => false)
+            allow(client.cluster).to receive(:next_primary).and_return(primary, legacy_primary)
+            expect(primary_socket).to receive(:write).and_raise(error)
+          end
+
+          context 'when the error is a SocketError' do
+
+            let(:error) do
+              Mongo::Error::SocketError
+            end
+
+            it 'does not retry writes and raises the original error' do
+              expect {
+                operation
+              }.to raise_error(error)
+              expect(collection.find(a: 1).count).to eq(0)
+            end
+          end
+
+          context 'when the error is a SocketTimeoutError' do
+
+            let(:error) do
+              Mongo::Error::SocketTimeoutError
+            end
+
+            it 'does not retry writes and raises the original error' do
+              expect {
+                operation
+              }.to raise_error(error)
+              expect(collection.find(a: 1).count).to eq(0)
+            end
+          end
+
+          context 'when the error is a retryable OperationFailure' do
+
+            let(:error) do
+              Mongo::Error::OperationFailure.new('not master')
+            end
+
+            it 'does not retry writes and raises the original error' do
+              expect {
+                operation
+              }.to raise_error(error)
+              expect(collection.find(a: 1).count).to eq(0)
+            end
+          end
+        end
+
+        [Mongo::Error::SocketError, Mongo::Error::SocketTimeoutError].each do |retryable_error|
+
+          context "when the first error is a #{retryable_error}" do
+
+            let(:error) do
+              retryable_error
+            end
+
+            before do
+              bad_socket = primary_connection.address.socket(primary_connection.socket_timeout,
+                                                             primary_connection.send(:ssl_options))
+              good_socket = primary_connection.address.socket(primary_connection.socket_timeout,
+                                                              primary_connection.send(:ssl_options))
+              allow(bad_socket).to receive(:write).and_raise(second_error)
+              allow(primary_connection.address).to receive(:socket).and_return(bad_socket, good_socket)
+            end
+
+            context 'when the second error is a SocketError' do
+
+              let(:second_error) do
+                Mongo::Error::SocketError
+              end
+
+              before do
+                expect(client.cluster).to receive(:scan!).twice
+              end
+
+              it 'does not retry writes and raises the second error' do
+                expect {
+                  operation
+                }.to raise_error(second_error)
+                expect(collection.find(a: 1).count).to eq(0)
+              end
+            end
+
+            context 'when the second error is a SocketTimeoutError' do
+
+              before do
+                expect(client.cluster).to receive(:scan!).twice
+              end
+
+              let(:second_error) do
+                Mongo::Error::SocketTimeoutError
+              end
+
+              it 'does not retry writes and raises the second error' do
+                expect {
+                  operation
+                }.to raise_error(second_error)
+                expect(collection.find(a: 1).count).to eq(0)
+              end
+            end
+
+            context 'when the second error is a retryable OperationFailure' do
+
+              before do
+                expect(client.cluster).to receive(:scan!).twice
+              end
+
+              let(:second_error) do
+                Mongo::Error::OperationFailure.new('not master')
+              end
+
+              it 'does not retry writes and raises the second error' do
+                expect {
+                  operation
+                }.to raise_error(second_error)
+                expect(collection.find(a: 1).count).to eq(0)
+              end
+            end
+
+            context 'when the second error is a non-retryable OperationFailure' do
+
+              before do
+                expect(client.cluster).to receive(:scan!).once
+              end
+
+              let(:second_error) do
+                Mongo::Error::OperationFailure.new('other error')
+              end
+
+              it 'does not retry writes and raises the first error' do
+                expect {
+                  operation
+                }.to raise_error(error)
+                expect(collection.find(a: 1).count).to eq(0)
+              end
+            end
+
+            context 'when the second error is a another error' do
+
+              let(:second_error) do
+                StandardError
+              end
+
+              it 'does not retry writes and raises the first error' do
+                expect {
+                  operation
+                }.to raise_error(error)
+                expect(collection.find(a: 1).count).to eq(0)
+              end
+            end
+          end
+        end
       end
     end
 
