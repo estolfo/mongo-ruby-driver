@@ -98,24 +98,24 @@ module Mongo
     # @return [ Result ] The result of the operation.
     #
     # @since 2.1.0
-    def write_with_retry(session, write_concern, server_selector, &block)
+    def write_with_retry(session, write_concern, &block)
       unless retry_write_allowed?(session, write_concern)
-        return legacy_write_with_retry(server_selector, &block)
+        return legacy_write_with_retry(&block)
       end
 
-      server = server_selector.call
+      server = cluster.next_primary
       unless server.retry_writes?
-        return legacy_write_with_retry(server_selector, server, &block)
+        return legacy_write_with_retry(server, &block)
       end
 
       begin
         txn_num = session.next_txn_num
         yield(server, txn_num)
       rescue Error::SocketError, Error::SocketTimeoutError => e
-        retry_write(e, txn_num, server_selector, &block)
+        retry_write(e, txn_num, &block)
       rescue Error::OperationFailure => e
         raise e unless e.write_retryable?
-        retry_write(e, txn_num, server_selector, &block)
+        retry_write(e, txn_num, &block)
       end
     end
 
@@ -126,10 +126,10 @@ module Mongo
           (write_concern.nil? || write_concern.acknowledged?)
     end
 
-    def retry_write(original_error, txn_num, server_selector, &block)
+    def retry_write(original_error, txn_num, &block)
       log_retry(original_error)
       cluster.scan!
-      server = server_selector.call
+      server = cluster.next_primary
       raise original_error unless (server.retry_writes? && txn_num)
       yield(server, txn_num)
     rescue Error::SocketError, Error::SocketTimeoutError => e
@@ -143,11 +143,11 @@ module Mongo
       raise original_error
     end
 
-    def legacy_write_with_retry(server_selector, server = nil)
+    def legacy_write_with_retry(server = nil)
       attempt = 0
       begin
         attempt += 1
-        yield(server || server_selector.call)
+        yield(server || cluster.next_primary)
       rescue Error::OperationFailure => e
         server = nil
         raise(e) if attempt > Cluster::MAX_WRITE_RETRIES

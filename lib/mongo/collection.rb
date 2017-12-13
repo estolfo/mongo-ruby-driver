@@ -419,7 +419,7 @@ module Mongo
     # @since 2.0.0
     def insert_one(document, options = {})
       client.send(:with_session, options) do |session|
-        write_with_retry(session, write_concern, Proc.new { next_primary }) do |server, txn_num|
+        write_with_retry(session, write_concern) do |server, txn_num|
           Operation::Write::Insert.new(
                 :documents => [ document ],
                 :db_name => database.name,

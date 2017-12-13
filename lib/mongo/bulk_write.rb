@@ -57,7 +57,7 @@ module Mongo
 
       client.send(:with_session, @options) do |session|
         operations.each do |operation|
-          write_with_retry(session, write_concern, Proc.new { next_primary }) do |server, txn_num|
+          write_with_retry(session, write_concern) do |server, txn_num|
             raise Error::UnsupportedCollation.new if op_combiner.has_collation && !server.features.collation_enabled?
             raise Error::UnsupportedArrayFilters.new if op_combiner.has_array_filters && !server.features.array_filters_enabled?
 

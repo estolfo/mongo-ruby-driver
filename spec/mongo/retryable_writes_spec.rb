@@ -70,7 +70,7 @@ describe 'Retryable Writes' do
   describe 'Retryable writes integration tests' do
 
     let(:primary) do
-      primary = client.cluster.servers.find { |s| s.primary? }
+      primary = client.cluster.next_primary
     end
 
     let(:primary_connection) do
@@ -92,6 +92,38 @@ describe 'Retryable Writes' do
       collection.insert_one(a:1)
     end
 
+    shared_examples_for 'an operation that is retried' do
+
+      before do
+        # Note that for writes, server.connectable? is called, refreshing the socket
+        allow(primary).to receive(:connectable?).and_return(true)
+        expect(primary_socket).to receive(:write).and_raise(Mongo::Error::SocketError)
+        expect(client.cluster).to receive(:scan!)
+      end
+
+      it 'retries writes', if: !standalone? || !sessions_enabled? do
+        operation
+        expect(collection.find(a: 1).count).to eq(1)
+      end
+    end
+
+    shared_examples_for 'an operation that is not retried' do
+
+      before do
+        # Note that for writes, server.connectable? is called, refreshing the socket
+        allow(primary).to receive(:connectable?).and_return(true)
+        expect(primary_socket).to receive(:write).and_raise(Mongo::Error::SocketError)
+        expect(client.cluster).not_to receive(:scan!)
+      end
+
+      it 'does not retry writes' do
+        expect {
+          operation
+        }.to raise_error(Mongo::Error::SocketError)
+        expect(collection.find(a: 1).count).to eq(0)
+      end
+    end
+
     context 'when the client has retry_writes set to true' do
 
       let!(:client) do
@@ -104,21 +136,16 @@ describe 'Retryable Writes' do
           client[TEST_COLL, write: WRITE_CONCERN]
         end
 
-        before do
-          # Note that for writes, server.connectable? is called, refreshing the socket
-          allow(primary).to receive(:connectable?).and_return(true)
-          expect(primary_socket).to receive(:write).and_raise(Mongo::Error::SocketError)
-        end
-
         context 'when the server supports retryable writes' do
 
           before do
-            expect(client.cluster).to receive(:scan!)
+            allow(primary).to receive(:retry_writes?).and_return(true)
           end
 
-          it 'retries writes' do
-            operation
-            expect(collection.find(a: 1).count).to eq(1)
+          if standalone? || !sessions_enabled?
+            it_behaves_like 'an operation that is not retried'
+          else
+            it_behaves_like 'an operation that is retried'
           end
         end
 
@@ -126,15 +153,9 @@ describe 'Retryable Writes' do
 
           before do
             allow(primary).to receive(:retry_writes?).and_return(false)
-            expect(client.cluster).not_to receive(:scan!)
           end
 
-          it 'does not retry writes' do
-            expect {
-              operation
-            }.to raise_error(Mongo::Error::SocketError)
-            expect(collection.find(a: 1).count).to eq(0)
-          end
+          it_behaves_like 'an operation that is not retried'
         end
       end
 
@@ -144,20 +165,7 @@ describe 'Retryable Writes' do
           client[TEST_COLL, write: { w: 0 }]
         end
 
-        before do
-          # Note that for writes, server.connectable? is called, refreshing the socket
-          allow(primary).to receive(:connectable?).and_return(true)
-          expect(primary_socket).to receive(:write).and_raise(Mongo::Error::SocketError)
-          expect(Mongo::Logger.logger).not_to receive(:warn)
-          expect(client.cluster).not_to receive(:scan!)
-        end
-
-        it 'does not retry writes' do
-          expect {
-            operation
-          }.to raise_error(Mongo::Error::SocketError)
-          expect(collection.find(a: 1).count).to eq(0)
-        end
+        it_behaves_like 'an operation that is not retried'
       end
 
       context 'when the collection has write concern not set' do
@@ -169,36 +177,23 @@ describe 'Retryable Writes' do
         context 'when the server supports retryable writes' do
 
           before do
-            # Note that for writes, server.connectable? is called, refreshing the socket
-            allow(primary).to receive(:connectable?).and_return(true)
-            expect(primary_socket).to receive(:write).and_raise(Mongo::Error::SocketError)
-            expect(Mongo::Logger.logger).to receive(:warn).once
-            expect(client.cluster).to receive(:scan!)
+            allow(primary).to receive(:retry_writes?).and_return(true)
           end
 
-          it 'retries writes' do
-            operation
-            expect(collection.find(a: 1).count).to eq(1)
+          if standalone?
+            it_behaves_like 'an operation that is not retried'
+          else
+            it_behaves_like 'an operation that is retried'
           end
         end
 
         context 'when the server does not support retryable writes' do
 
           before do
-            # Note that for writes, server.connectable? is called, refreshing the socket
-            allow(primary).to receive(:connectable?).and_return(true)
             allow(primary).to receive(:retry_writes?).and_return(false)
-            expect(primary_socket).to receive(:write).and_raise(Mongo::Error::SocketError)
-            expect(Mongo::Logger.logger).not_to receive(:warn)
-            expect(client.cluster).not_to receive(:scan!)
           end
 
-          it 'does not retry writes' do
-            expect {
-              operation
-            }.to raise_error(Mongo::Error::SocketError)
-            expect(collection.find(a: 1).count).to eq(0)
-          end
+          it_behaves_like 'an operation that is not retried'
         end
       end
     end
@@ -215,20 +210,7 @@ describe 'Retryable Writes' do
           client[TEST_COLL, write: WRITE_CONCERN]
         end
 
-        before do
-          # Note that for writes, server.connectable? is called, refreshing the socket
-          allow(primary).to receive(:connectable?).and_return(true)
-          expect(primary_socket).to receive(:write).and_raise(Mongo::Error::SocketError)
-          expect(Mongo::Logger.logger).not_to receive(:warn)
-          expect(client.cluster).not_to receive(:scan!)
-        end
-
-        it 'does not retry writes' do
-          expect {
-            operation
-          }.to raise_error(Mongo::Error::SocketError)
-          expect(collection.find(a: 1).count).to eq(0)
-        end
+        it_behaves_like 'an operation that is not retried'
       end
 
       context 'when the collection has write concern unacknowledged' do
@@ -237,20 +219,7 @@ describe 'Retryable Writes' do
           client[TEST_COLL, write: { w: 0 }]
         end
 
-        before do
-          # Note that for writes, server.connectable? is called, refreshing the socket
-          allow(primary).to receive(:connectable?).and_return(true)
-          expect(primary_socket).to receive(:write).and_raise(Mongo::Error::SocketError)
-          expect(Mongo::Logger.logger).not_to receive(:warn)
-          expect(client.cluster).not_to receive(:scan!)
-        end
-
-        it 'does not retry writes' do
-          expect {
-            operation
-          }.to raise_error(Mongo::Error::SocketError)
-          expect(collection.find(a: 1).count).to eq(0)
-        end
+        it_behaves_like 'an operation that is not retried'
       end
 
       context 'when the collection has write concern not set' do
@@ -259,20 +228,7 @@ describe 'Retryable Writes' do
           client[TEST_COLL]
         end
 
-        before do
-          # Note that for writes, server.connectable? is called, refreshing the socket
-          allow(primary).to receive(:connectable?).and_return(true)
-          expect(primary_socket).to receive(:write).and_raise(Mongo::Error::SocketError)
-          expect(Mongo::Logger.logger).not_to receive(:warn)
-          expect(client.cluster).not_to receive(:scan!)
-        end
-
-        it 'does not retry writes' do
-          expect {
-            operation
-          }.to raise_error(Mongo::Error::SocketError)
-          expect(collection.find(a: 1).count).to eq(0)
-        end
+        it_behaves_like 'an operation that is not retried'
       end
     end
 
@@ -288,20 +244,7 @@ describe 'Retryable Writes' do
           client[TEST_COLL, write: WRITE_CONCERN]
         end
 
-        before do
-          # Note that for writes, server.connectable? is called, refreshing the socket
-          allow(primary).to receive(:connectable?).and_return(true)
-          expect(primary_socket).to receive(:write).and_raise(Mongo::Error::SocketError)
-          expect(Mongo::Logger.logger).not_to receive(:warn)
-          expect(client.cluster).not_to receive(:scan!)
-        end
-
-        it 'does not retry writes' do
-          expect {
-            collection.insert_one(a:1)
-          }.to raise_error(Mongo::Error::SocketError)
-          expect(collection.find(a: 1).count).to eq(0)
-        end
+        it_behaves_like 'an operation that is not retried'
       end
 
       context 'when the collection has write concern unacknowledged' do
@@ -310,20 +253,7 @@ describe 'Retryable Writes' do
           client[TEST_COLL, write: { w: 0 }]
         end
 
-        before do
-          # Note that for writes, server.connectable? is called, refreshing the socket
-          allow(primary).to receive(:connectable?).and_return(true)
-          expect(primary_socket).to receive(:write).and_raise(Mongo::Error::SocketError)
-          expect(Mongo::Logger.logger).not_to receive(:warn)
-          expect(client.cluster).not_to receive(:scan!)
-        end
-
-        it 'does not retry writes' do
-          expect {
-            collection.insert_one(a:1)
-          }.to raise_error(Mongo::Error::SocketError)
-          expect(collection.find(a: 1).count).to eq(0)
-        end
+        it_behaves_like 'an operation that is not retried'
       end
 
       context 'when the collection has write concern not set' do
@@ -332,20 +262,7 @@ describe 'Retryable Writes' do
           client[TEST_COLL]
         end
 
-        before do
-          # Note that for writes, server.connectable? is called, refreshing the socket
-          allow(primary).to receive(:connectable?).and_return(true)
-          expect(primary_socket).to receive(:write).and_raise(Mongo::Error::SocketError)
-          expect(Mongo::Logger.logger).not_to receive(:warn)
-          expect(client.cluster).not_to receive(:scan!)
-        end
-
-        it 'does not retry writes' do
-          expect {
-            collection.insert_one(a:1)
-          }.to raise_error(Mongo::Error::SocketError)
-          expect(collection.find(a: 1).count).to eq(0)
-        end
+        it_behaves_like 'an operation that is not retried'
       end
     end
   end
