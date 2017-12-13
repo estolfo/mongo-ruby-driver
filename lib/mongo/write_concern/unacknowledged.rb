@@ -38,7 +38,6 @@ module Mongo
       def get_last_error
         NOOP
       end
-      alias :acknowledged? :get_last_error
 
       # Get a human-readable string representation of an unacknowledged write concern.
       #

@@ -35,7 +35,6 @@ module Mongo
           Options::Mapper.transform_values_to_strings(options)
         )
       end
-      alias :acknowledged? :get_last_error
 
       # Get a human-readable string representation of an acknowledged write concern.
       #

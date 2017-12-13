@@ -99,41 +99,46 @@ module Mongo
     #
     # @since 2.1.0
     def write_with_retry(session, write_concern, server_selector, &block)
-
-      if session.nil? || !session.retry_writes? || (write_concern && !write_concern.acknowledged?)
+      unless retry_write_allowed?(session, write_concern)
         return legacy_write_with_retry(server_selector, &block)
-      else
-        server = server_selector.call
-        return legacy_write_with_retry(server_selector, server, &block) unless server.retry_writes?
-
-        begin
-          txn_num = session.next_txn_num
-          yield(server, txn_num)
-
-
-        rescue Error::SocketError, Error::SocketTimeoutError, Error::OperationFailure => e
-          raise e if e.is_a?(Error::OperationFailure) && !e.write_retryable?
-          cluster.scan!
-          begin
-            server = server_selector.call
-            raise e unless server.retry_writes?
-            yield(server, txn_num)
-          rescue Error::NoServerAvailable
-            raise e
-          rescue Error::SocketError, Error::SocketTimeoutError => second_e
-            cluster.scan!
-            raise second_e
-          rescue Error::OperationFailure => second_e
-            if second_e.write_retryable?
-              cluster.scan!
-            end
-            raise second_e
-          end
-        end
       end
+
+      server = server_selector.call
+      unless server.retry_writes?
+        return legacy_write_with_retry(server_selector, server, &block)
+      end
+
+      txn_num = session.next_txn_num
+      yield(server, txn_num)
+    rescue Error::SocketError, Error::SocketTimeoutError => e
+      retry_write(e, txn_num, server_selector, &block)
+    rescue Error::OperationFailure => e
+      raise e unless e.write_retryable?
+      retry_write(e, txn_num, server_selector, &block)
     end
 
     private
+
+    def retry_write_allowed?(session, write_concern)
+      session && session.retry_writes? &&
+          (write_concern.nil? || write_concern.acknowledged?)
+    end
+
+    def retry_write(original_error, txn_num, server_selector, &block)
+      cluster.scan!
+      server = server_selector.call
+      raise original_error unless (server.retry_writes? && txn_num)
+      yield(server, txn_num)
+    rescue Error::SocketError, Error::SocketTimeoutError => e
+      cluster.scan!
+      raise e
+    rescue Error::OperationFailure => e
+      raise original_error unless e.write_retryable?
+      cluster.scan!
+      raise e
+    rescue
+      raise original_error
+    end
 
     def legacy_write_with_retry(server_selector, server = nil)
       attempt = 0
