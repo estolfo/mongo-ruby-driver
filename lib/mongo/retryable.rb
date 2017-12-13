@@ -108,13 +108,15 @@ module Mongo
         return legacy_write_with_retry(server_selector, server, &block)
       end
 
-      txn_num = session.next_txn_num
-      yield(server, txn_num)
-    rescue Error::SocketError, Error::SocketTimeoutError => e
-      retry_write(e, txn_num, server_selector, &block)
-    rescue Error::OperationFailure => e
-      raise e unless e.write_retryable?
-      retry_write(e, txn_num, server_selector, &block)
+      begin
+        txn_num = session.next_txn_num
+        yield(server, txn_num)
+      rescue Error::SocketError, Error::SocketTimeoutError => e
+        retry_write(e, txn_num, server_selector, &block)
+      rescue Error::OperationFailure => e
+        raise e unless e.write_retryable?
+        retry_write(e, txn_num, server_selector, &block)
+      end
     end
 
     private
