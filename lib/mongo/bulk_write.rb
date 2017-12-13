@@ -171,7 +171,9 @@ module Mongo
 
     def split_execute(name, values, server, operation_id, combiner, session, txn_num)
       execute_operation(name, values.shift(values.size / 2), server, operation_id, combiner, session, txn_num)
-      execute_operation(name, values, server, operation_id, combiner, session, session.next_txn_num)
+
+      txn_num = session.next_txn_num if session
+      execute_operation(name, values, server, operation_id, combiner, session, txn_num)
     end
 
     def delete_one(documents, server, operation_id, session, txn_num)

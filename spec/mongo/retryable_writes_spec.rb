@@ -365,9 +365,9 @@ describe 'Retryable Writes' do
             allow(primary).to receive(:retry_writes?).and_return(true)
           end
 
-          if standalone? || !sessions_enabled?
+          if standalone? && sessions_enabled?
             it_behaves_like 'an operation that is not retried'
-          else
+          elsif sessions_enabled?
             it_behaves_like 'an operation that is retried'
           end
         end
@@ -403,9 +403,9 @@ describe 'Retryable Writes' do
             allow(primary).to receive(:retry_writes?).and_return(true)
           end
 
-          if standalone?
+          if standalone? && sessions_enabled?
             it_behaves_like 'an operation that is not retried'
-          else
+          elsif sessions_enabled?
             it_behaves_like 'an operation that is retried'
           end
         end

@@ -1460,7 +1460,7 @@ describe Mongo::Client do
     end
   end
 
-  describe '#retry_writes' do
+  describe '#retry_writes', if: !standalone? do
 
     context 'when the option is set to true' do
 
