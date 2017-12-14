@@ -218,6 +218,21 @@ describe Mongo::Client do
 
     context 'when providing options' do
 
+      context 'when retry_writes is defined' do
+
+        let(:options) do
+          { retry_writes: true }
+        end
+
+        let(:client) do
+          described_class.new([default_address.seed], authorized_client.options.merge(options))
+        end
+
+        it 'sets the option' do
+          expect(client.options['retry_writes']).to eq(options[:retry_writes])
+        end
+      end
+
       context 'when compressors are provided' do
 
         let(:client) do
@@ -1456,52 +1471,6 @@ describe Mongo::Client do
         expect {
           session
         }.to raise_exception(Mongo::Error::InvalidSession)
-      end
-    end
-  end
-
-  describe '#retry_writes', if: !standalone? do
-
-    context 'when the option is set to true' do
-
-      let(:client) do
-        described_class.new([default_address.to_s], :retry_writes => true)
-      end
-
-      context 'when the topology is standalone', if: standalone? do
-
-        it 'returns false' do
-          expect(client.retry_writes?).to be(false)
-        end
-      end
-
-      context 'when the topology is replica set or sharded', if: !standalone? do
-
-        it 'returns true' do
-          expect(client.retry_writes?).to be(true)
-        end
-      end
-    end
-
-    context 'when the option is set to false' do
-
-      let(:client) do
-        described_class.new([default_address.to_s], :retry_writes => false)
-      end
-
-      it 'returns false' do
-        expect(client.retry_writes?).to be(false)
-      end
-    end
-
-    context 'when the option is not defined' do
-
-      let(:client) do
-        described_class.new([default_address.to_s])
-      end
-
-      it 'returns false' do
-        expect(client.retry_writes?).to be(false)
       end
     end
   end
