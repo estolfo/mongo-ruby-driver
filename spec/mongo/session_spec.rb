@@ -134,7 +134,7 @@ describe Mongo::Session, if: test_sessions? do
     end
   end
 
-  describe '#retry_writes?', if: !standalone? && sessions_enabled? do
+  describe '#retry_writes?' do
 
     context 'when the option is set to true' do
 
@@ -142,18 +142,9 @@ describe Mongo::Session, if: test_sessions? do
         Mongo::Client.new([default_address.to_s], :retry_writes => true)
       end
 
-      context 'when the topology is standalone', if: standalone? do
 
-        it 'returns false' do
-          expect(client.start_session.retry_writes?).to be(false)
-        end
-      end
-
-      context 'when the topology is replica set or sharded', if: !standalone? do
-
-        it 'returns true' do
-          expect(client.start_session.retry_writes?).to be(true)
-        end
+      it 'returns true' do
+        expect(client.start_session.retry_writes?).to be(true)
       end
     end
 
