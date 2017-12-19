@@ -57,10 +57,8 @@ module Mongo
 
       client.send(:with_session, @options) do |session|
         operations.each do |operation|
-          write_with_retry(session, write_concern) do |server, txn_num|
-            raise Error::UnsupportedCollation.new if op_combiner.has_collation && !server.features.collation_enabled?
-            raise Error::UnsupportedArrayFilters.new if op_combiner.has_array_filters && !server.features.array_filters_enabled?
-
+          if single_statement?(operation)
+            write_with_retry(session, write_concern) do |server, txn_num|
               execute_operation(
                   operation.keys.first,
                   operation.values.first,
@@ -68,8 +66,18 @@ module Mongo
                   operation_id,
                   result_combiner,
                   session,
-                  txn_num
-              )
+                  txn_num)
+            end
+          else
+            legacy_write_with_retry do |server|
+              execute_operation(
+                  operation.keys.first,
+                  operation.values.first,
+                  server,
+                  operation_id,
+                  result_combiner,
+                  session)
+            end
           end
         end
       end
@@ -138,6 +146,12 @@ module Mongo
 
     private
 
+    def single_statement?(operation)
+      [:delete_one,
+       :update_one,
+       :insert_one].include?(operation.keys.first)
+    end
+
     def base_spec(operation_id, session)
       {
         :db_name => database.name,
@@ -152,7 +166,9 @@ module Mongo
       }
     end
 
-    def execute_operation(name, values, server, operation_id, combiner, session, txn_num)
+    def execute_operation(name, values, server, operation_id, combiner, session, txn_num = nil)
+      raise Error::UnsupportedCollation.new if op_combiner.has_collation && !server.features.collation_enabled?
+      raise Error::UnsupportedArrayFilters.new if op_combiner.has_array_filters && !server.features.array_filters_enabled?
       begin
         if values.size > server.max_write_batch_size
           split_execute(name, values, server, operation_id, combiner, session, txn_num)
