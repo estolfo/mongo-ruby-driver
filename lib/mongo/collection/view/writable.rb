@@ -121,7 +121,6 @@ module Mongo
             write_with_retry(session, write_concern) do |server, txn_num|
               apply_collation!(cmd, server, opts)
               apply_array_filters!(cmd, server, opts)
-
               Operation::Commands::Command.new(
                   :selector => cmd,
                   :db_name => database.name,
@@ -147,7 +146,6 @@ module Mongo
         # @since 2.0.0
         def delete_many(opts = {})
           delete_doc = { Operation::Q => filter, Operation::LIMIT => 0 }
-
           with_session do |session|
             legacy_write_with_retry do |server|
               apply_collation!(delete_doc, server, opts)
@@ -213,7 +211,6 @@ module Mongo
                          Operation::MULTI => false,
                          Operation::UPSERT => !!opts[:upsert]
                         }
-
           write_concern = collection.write_concern
           with_session do |session|
             write_with_retry(session, write_concern) do |server, txn_num|
@@ -255,7 +252,6 @@ module Mongo
                          Operation::U => spec,
                          Operation::MULTI => true,
                          Operation::UPSERT => !!opts[:upsert] }
-
           with_session do |session|
             legacy_write_with_retry do |server|
               apply_collation!(update_doc, server, opts)
@@ -294,7 +290,6 @@ module Mongo
                          Operation::U => spec,
                          Operation::MULTI => false,
                          Operation::UPSERT => !!opts[:upsert] }
-
           write_concern = collection.write_concern
           with_session do |session|
             write_with_retry(session, write_concern) do |server, txn_num|

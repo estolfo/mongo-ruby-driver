@@ -520,7 +520,7 @@ module Mongo
       # @example Get the transaction number.
       #   specifiable.txn_num
       #
-      # @return [ Integer ] The transaction id.
+      # @return [ Integer ] The transaction number.
       #
       # @since 2.5.0
       def txn_num
