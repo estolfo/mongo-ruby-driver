@@ -134,7 +134,7 @@ describe Mongo::Session, if: test_sessions? do
     end
   end
 
-  describe '#retry_writes?' do
+  describe '#retry_writes?', if: test_sessions? do
 
     context 'when the option is set to true' do
 
