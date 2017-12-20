@@ -59,6 +59,30 @@ describe Mongo::Collection::View::MapReduce do
     described_class.new(view, map, reduce, options)
   end
 
+  describe '#map' do
+
+    let(:results) do
+      map_reduce.map do |document|
+        document
+      end
+    end
+
+    it 'calls the Enumerable method' do
+      expect(results).to eq(map_reduce.to_a)
+    end
+  end
+
+  describe '#reduce' do
+
+    let(:results) do
+      map_reduce.reduce(0) { |sum, doc| sum + doc['value']['population'] }
+    end
+
+    it 'calls the Enumerable method' do
+      expect(results).to eq(12000000)
+    end
+  end
+
   describe '#each' do
 
     context 'when no options are provided' do
@@ -137,6 +161,21 @@ describe Mongo::Collection::View::MapReduce do
 
       after do
         authorized_client['output_collection'].delete_many
+      end
+
+      context 'when #each is called without a block' do
+
+        let(:new_map_reduce) do
+          map_reduce.out(replace: 'output_collection')
+        end
+
+        before do
+          new_map_reduce.each
+        end
+
+        it 'executes the map reduce' do
+          expect(map_reduce.to_a).to eq(new_map_reduce.to_a)
+        end
       end
 
       context 'when the option is to replace' do
