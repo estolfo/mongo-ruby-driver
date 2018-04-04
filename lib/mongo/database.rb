@@ -156,7 +156,7 @@ module Mongo
       preference = ServerSelector.get(opts[:read] || ServerSelector::PRIMARY)
       server = preference.select_server(cluster)
       client.send(:with_session, opts) do |session|
-        Operation::Commands::Command.new({
+        Operations::Command.new({
           :selector => operation.dup,
           :db_name => name,
           :read => preference,
