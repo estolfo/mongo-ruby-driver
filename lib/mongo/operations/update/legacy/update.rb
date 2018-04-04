@@ -6,8 +6,8 @@ require 'mongo/operations/update/builder/message'
 
 module Mongo
   module Operations
-    module Legacy
-      class Update
+    class Update
+      class Legacy
         include Operations::Specifiable
 
         def initialize(spec)

@@ -1,7 +1,7 @@
 module Mongo
   module Operations
-    module Legacy
-      class Update
+    class Update
+      class Legacy
 
         # Defines custom behaviour of results for an update on server
         # version <= 2.4.

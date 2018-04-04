@@ -43,7 +43,7 @@ module Mongo
         if server.features.op_msg_enabled?
           message = Builder::OpMsg.new(self, server).message
         elsif unacknowledged_write?
-          Legacy::Update.new(spec).execute(server)
+          Legacy.new(spec).execute(server)
         else
           message = Builder::Command.new(self, server).message
         end
